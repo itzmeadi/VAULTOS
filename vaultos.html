@@ -1,0 +1,1280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VaultOS — Secure File System</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;400;500;600;700&family=Orbitron:wght@400;700;900&display=swap');
+
+  :root {
+    --bg: #050810;
+    --panel: #0a0f1e;
+    --border: #1a2a4a;
+    --accent: #00d4ff;
+    --accent2: #ff3366;
+    --accent3: #00ff88;
+    --warn: #ffaa00;
+    --text: #c8d8f0;
+    --text-dim: #4a6080;
+    --text-bright: #e8f4ff;
+    --glow: 0 0 20px rgba(0,212,255,0.3);
+    --glow2: 0 0 20px rgba(255,51,102,0.3);
+    --glow3: 0 0 20px rgba(0,255,136,0.3);
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    font-family: 'Rajdhani', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Animated grid background */
+  body::before {
+    content:'';
+    position:fixed;
+    inset:0;
+    background-image:
+      linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    animation: gridScroll 20s linear infinite;
+    pointer-events:none;
+    z-index:0;
+  }
+  @keyframes gridScroll {
+    0%{background-position:0 0}
+    100%{background-position:40px 40px}
+  }
+
+  /* Scanline */
+  body::after {
+    content:'';
+    position:fixed;
+    inset:0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.1) 2px, rgba(0,0,0,0.1) 4px);
+    pointer-events:none;
+    z-index:0;
+  }
+
+  /* ── SCREENS ── */
+  .screen { position:relative; z-index:1; display:none; }
+  .screen.active { display:flex; }
+
+  /* ── LOGIN ── */
+  #loginScreen {
+    min-height:100vh;
+    align-items:center;
+    justify-content:center;
+    flex-direction:column;
+    gap:32px;
+  }
+
+  .logo-block {
+    text-align:center;
+    animation: fadeDown 0.6s ease;
+  }
+  .logo-title {
+    font-family:'Orbitron', monospace;
+    font-size:52px;
+    font-weight:900;
+    color: var(--accent);
+    text-shadow: var(--glow), 0 0 60px rgba(0,212,255,0.2);
+    letter-spacing:8px;
+  }
+  .logo-sub {
+    font-family:'Share Tech Mono', monospace;
+    font-size:12px;
+    color: var(--text-dim);
+    letter-spacing:4px;
+    margin-top:4px;
+  }
+
+  .login-box {
+    width:380px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-top: 2px solid var(--accent);
+    padding:32px;
+    position:relative;
+    animation: fadeUp 0.6s 0.2s ease both;
+    box-shadow: 0 40px 80px rgba(0,0,0,0.5), inset 0 1px 0 rgba(0,212,255,0.1);
+  }
+  .login-box::before {
+    content:'[ AUTH TERMINAL ]';
+    font-family:'Share Tech Mono', monospace;
+    font-size:10px;
+    color: var(--accent);
+    letter-spacing:3px;
+    position:absolute;
+    top:-1px; left:20px;
+    background:var(--panel);
+    padding:0 8px;
+    transform:translateY(-50%);
+  }
+
+  .tab-row {
+    display:flex;
+    gap:0;
+    margin-bottom:24px;
+    border-bottom: 1px solid var(--border);
+  }
+  .tab-btn {
+    flex:1;
+    background:none;
+    border:none;
+    color: var(--text-dim);
+    font-family:'Rajdhani', sans-serif;
+    font-size:14px;
+    font-weight:600;
+    letter-spacing:2px;
+    padding:10px;
+    cursor:pointer;
+    transition:all .2s;
+    text-transform:uppercase;
+  }
+  .tab-btn.active {
+    color: var(--accent);
+    border-bottom: 2px solid var(--accent);
+  }
+
+  .form-group { margin-bottom:16px; }
+  .form-label {
+    font-family:'Share Tech Mono', monospace;
+    font-size:10px;
+    letter-spacing:2px;
+    color: var(--text-dim);
+    display:block;
+    margin-bottom:6px;
+  }
+  .form-input {
+    width:100%;
+    background: rgba(0,212,255,0.03);
+    border: 1px solid var(--border);
+    border-radius:2px;
+    color: var(--text-bright);
+    font-family:'Share Tech Mono', monospace;
+    font-size:14px;
+    padding:10px 14px;
+    outline:none;
+    transition:border-color .2s, box-shadow .2s;
+  }
+  .form-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px rgba(0,212,255,0.2);
+  }
+
+  .btn-primary {
+    width:100%;
+    background: linear-gradient(135deg, rgba(0,212,255,0.15), rgba(0,212,255,0.05));
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    font-family:'Rajdhani', sans-serif;
+    font-size:14px;
+    font-weight:700;
+    letter-spacing:4px;
+    text-transform:uppercase;
+    padding:12px;
+    cursor:pointer;
+    transition:all .2s;
+    margin-top:8px;
+    position:relative;
+    overflow:hidden;
+  }
+  .btn-primary::before {
+    content:'';
+    position:absolute;
+    left:-100%;
+    top:0; bottom:0;
+    width:100%;
+    background: linear-gradient(90deg, transparent, rgba(0,212,255,0.1), transparent);
+    transition: left .4s;
+  }
+  .btn-primary:hover::before { left:100%; }
+  .btn-primary:hover {
+    background: linear-gradient(135deg, rgba(0,212,255,0.25), rgba(0,212,255,0.1));
+    box-shadow: var(--glow);
+  }
+  .btn-primary:active { transform:scale(0.98); }
+
+  .msg-box {
+    font-family:'Share Tech Mono', monospace;
+    font-size:11px;
+    padding:8px 12px;
+    margin-top:12px;
+    border-radius:2px;
+    display:none;
+  }
+  .msg-box.error { background:rgba(255,51,102,0.1); border:1px solid rgba(255,51,102,0.3); color:var(--accent2); display:block; }
+  .msg-box.success { background:rgba(0,255,136,0.1); border:1px solid rgba(0,255,136,0.3); color:var(--accent3); display:block; }
+
+  /* ── MAIN APP ── */
+  #appScreen { flex-direction:column; min-height:100vh; }
+
+  /* Top bar */
+  .topbar {
+    display:flex; align-items:center; gap:16px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    height:56px;
+    position:sticky; top:0; z-index:10;
+  }
+  .topbar-logo {
+    font-family:'Orbitron', monospace;
+    font-size:16px;
+    font-weight:700;
+    color: var(--accent);
+    letter-spacing:4px;
+    margin-right:auto;
+  }
+  .topbar-user {
+    font-family:'Share Tech Mono', monospace;
+    font-size:11px;
+    color: var(--text-dim);
+  }
+  .badge {
+    font-family:'Share Tech Mono', monospace;
+    font-size:10px;
+    padding:3px 8px;
+    border-radius:2px;
+    letter-spacing:1px;
+  }
+  .badge-admin { background:rgba(255,170,0,0.15); border:1px solid rgba(255,170,0,0.4); color:var(--warn); }
+  .badge-user  { background:rgba(0,212,255,0.08); border:1px solid rgba(0,212,255,0.3); color:var(--accent); }
+
+  .btn-sm {
+    background:none;
+    border:1px solid var(--border);
+    color: var(--text-dim);
+    font-family:'Rajdhani', sans-serif;
+    font-size:12px;
+    font-weight:600;
+    letter-spacing:2px;
+    text-transform:uppercase;
+    padding:6px 14px;
+    cursor:pointer;
+    transition:all .2s;
+    border-radius:2px;
+  }
+  .btn-sm:hover { border-color:var(--accent2); color:var(--accent2); }
+
+  /* Layout */
+  .app-body {
+    display:flex;
+    flex:1;
+    min-height: calc(100vh - 56px);
+  }
+
+  /* Sidebar */
+  .sidebar {
+    width:220px;
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    padding: 20px 0;
+    flex-shrink:0;
+  }
+  .sidebar-section {
+    padding: 0 16px 16px;
+    margin-bottom:8px;
+  }
+  .sidebar-label {
+    font-family:'Share Tech Mono', monospace;
+    font-size:9px;
+    letter-spacing:3px;
+    color: var(--text-dim);
+    margin-bottom:8px;
+    padding-left:4px;
+  }
+  .nav-item {
+    display:flex; align-items:center; gap:10px;
+    padding:9px 12px;
+    cursor:pointer;
+    border-radius:2px;
+    font-size:13px;
+    font-weight:500;
+    letter-spacing:1px;
+    color: var(--text-dim);
+    transition:all .15s;
+    border-left: 2px solid transparent;
+    margin-bottom:2px;
+  }
+  .nav-item:hover { background:rgba(0,212,255,0.05); color:var(--text); }
+  .nav-item.active {
+    background:rgba(0,212,255,0.08);
+    color: var(--accent);
+    border-left-color: var(--accent);
+  }
+  .nav-icon { font-size:14px; width:18px; text-align:center; }
+
+  /* Main content */
+  .main-content {
+    flex:1;
+    padding:24px;
+    overflow-y:auto;
+  }
+
+  /* Panel */
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius:2px;
+    margin-bottom:20px;
+    overflow:hidden;
+  }
+  .panel-header {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 20px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(0,212,255,0.02);
+  }
+  .panel-title {
+    font-family:'Share Tech Mono', monospace;
+    font-size:11px;
+    letter-spacing:3px;
+    color: var(--accent);
+    text-transform:uppercase;
+  }
+  .panel-body { padding:20px; }
+
+  /* Tabs */
+  .view { display:none; }
+  .view.active { display:block; }
+
+  /* File table */
+  .file-table { width:100%; border-collapse:collapse; }
+  .file-table th {
+    font-family:'Share Tech Mono', monospace;
+    font-size:9px;
+    letter-spacing:3px;
+    color: var(--text-dim);
+    text-align:left;
+    padding:8px 12px;
+    border-bottom:1px solid var(--border);
+    text-transform:uppercase;
+  }
+  .file-table td {
+    padding:10px 12px;
+    border-bottom:1px solid rgba(26,42,74,0.5);
+    font-size:13px;
+    vertical-align:middle;
+  }
+  .file-table tr:last-child td { border-bottom:none; }
+  .file-table tr:hover td { background:rgba(0,212,255,0.03); }
+
+  .file-icon { font-size:16px; margin-right:8px; }
+  .file-name { color:var(--text-bright); font-weight:500; }
+  .file-enc {
+    font-family:'Share Tech Mono', monospace;
+    font-size:9px;
+    padding:2px 6px;
+    border-radius:2px;
+    background:rgba(0,255,136,0.1);
+    border:1px solid rgba(0,255,136,0.3);
+    color:var(--accent3);
+  }
+  .perm-badge {
+    font-family:'Share Tech Mono', monospace;
+    font-size:9px;
+    padding:2px 6px;
+    border-radius:2px;
+    margin-right:3px;
+  }
+  .perm-r { background:rgba(0,212,255,0.1); border:1px solid rgba(0,212,255,0.3); color:var(--accent); }
+  .perm-w { background:rgba(255,170,0,0.1); border:1px solid rgba(255,170,0,0.3); color:var(--warn); }
+  .perm-d { background:rgba(255,51,102,0.1); border:1px solid rgba(255,51,102,0.3); color:var(--accent2); }
+  .perm-x { background:rgba(100,100,100,0.1); border:1px solid rgba(100,100,100,0.3); color:var(--text-dim); }
+
+  .action-btn {
+    background:none;
+    border:1px solid var(--border);
+    color: var(--text-dim);
+    font-family:'Share Tech Mono', monospace;
+    font-size:10px;
+    padding:4px 8px;
+    cursor:pointer;
+    border-radius:2px;
+    transition:all .15s;
+    margin-right:4px;
+  }
+  .action-btn:hover { border-color:var(--accent); color:var(--accent); }
+  .action-btn.del:hover { border-color:var(--accent2); color:var(--accent2); }
+
+  /* Upload zone */
+  .upload-zone {
+    border:2px dashed var(--border);
+    border-radius:4px;
+    padding:40px;
+    text-align:center;
+    cursor:pointer;
+    transition:all .2s;
+    margin-bottom:20px;
+  }
+  .upload-zone:hover { border-color:var(--accent); background:rgba(0,212,255,0.03); }
+  .upload-zone-icon { font-size:32px; margin-bottom:12px; }
+  .upload-zone-text { font-family:'Share Tech Mono', monospace; font-size:11px; color:var(--text-dim); }
+
+  /* Log table */
+  .log-row {
+    display:flex; gap:12px; align-items:flex-start;
+    padding:8px 0;
+    border-bottom:1px solid rgba(26,42,74,0.3);
+    font-family:'Share Tech Mono', monospace;
+    font-size:11px;
+  }
+  .log-row:last-child { border-bottom:none; }
+  .log-time { color:var(--text-dim); white-space:nowrap; min-width:80px; }
+  .log-level { min-width:50px; }
+  .log-level.INFO { color:var(--accent); }
+  .log-level.WARN { color:var(--warn); }
+  .log-level.ERROR { color:var(--accent2); }
+  .log-level.AUTH { color:var(--accent3); }
+  .log-msg { color:var(--text); flex:1; }
+
+  /* Stats cards */
+  .stats-grid {
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:16px;
+    margin-bottom:20px;
+  }
+  .stat-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-top:2px solid var(--accent);
+    padding:16px 20px;
+    position:relative;
+    overflow:hidden;
+  }
+  .stat-card:nth-child(2) { border-top-color:var(--accent3); }
+  .stat-card:nth-child(3) { border-top-color:var(--warn); }
+  .stat-card:nth-child(4) { border-top-color:var(--accent2); }
+  .stat-value {
+    font-family:'Orbitron', monospace;
+    font-size:28px;
+    font-weight:700;
+    color:var(--text-bright);
+    line-height:1;
+    margin-bottom:4px;
+  }
+  .stat-label {
+    font-family:'Share Tech Mono', monospace;
+    font-size:9px;
+    letter-spacing:2px;
+    color:var(--text-dim);
+    text-transform:uppercase;
+  }
+  .stat-icon {
+    position:absolute;
+    right:16px; top:50%;
+    transform:translateY(-50%);
+    font-size:28px;
+    opacity:0.15;
+  }
+
+  /* User management */
+  .user-card {
+    display:flex; align-items:center; gap:16px;
+    padding:14px 20px;
+    border-bottom:1px solid rgba(26,42,74,0.5);
+  }
+  .user-card:last-child { border-bottom:none; }
+  .avatar {
+    width:36px; height:36px;
+    background: linear-gradient(135deg, rgba(0,212,255,0.2), rgba(0,212,255,0.05));
+    border:1px solid rgba(0,212,255,0.3);
+    border-radius:2px;
+    display:flex; align-items:center; justify-content:center;
+    font-family:'Orbitron', monospace;
+    font-size:14px;
+    font-weight:700;
+    color:var(--accent);
+    flex-shrink:0;
+  }
+  .user-info { flex:1; }
+  .user-name { font-weight:600; font-size:14px; color:var(--text-bright); }
+  .user-email { font-family:'Share Tech Mono', monospace; font-size:10px; color:var(--text-dim); }
+
+  /* Upload modal */
+  .modal-overlay {
+    display:none;
+    position:fixed; inset:0;
+    background:rgba(0,0,0,0.7);
+    z-index:100;
+    align-items:center; justify-content:center;
+    backdrop-filter:blur(4px);
+  }
+  .modal-overlay.open { display:flex; }
+  .modal {
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-top:2px solid var(--accent);
+    width:460px;
+    padding:28px;
+    animation: fadeUp .25s ease;
+  }
+  .modal-title {
+    font-family:'Share Tech Mono', monospace;
+    font-size:12px;
+    letter-spacing:3px;
+    color:var(--accent);
+    margin-bottom:20px;
+  }
+  .perm-checkboxes { display:flex; gap:12px; flex-wrap:wrap; margin-top:8px; }
+  .perm-check {
+    display:flex; align-items:center; gap:6px;
+    cursor:pointer;
+    font-size:12px;
+    color:var(--text-dim);
+  }
+  .perm-check input[type=checkbox] { accent-color:var(--accent); }
+
+  /* Select */
+  select.form-input {
+    appearance:none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%234a6080' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;
+    background-position: right 12px center;
+    padding-right:32px;
+    cursor:pointer;
+  }
+  option { background:var(--panel); color:var(--text); }
+
+  /* Toast */
+  .toast-container { position:fixed; bottom:24px; right:24px; z-index:200; display:flex; flex-direction:column; gap:8px; }
+  .toast {
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-left:3px solid var(--accent3);
+    padding:12px 16px;
+    font-family:'Share Tech Mono', monospace;
+    font-size:11px;
+    color:var(--text);
+    min-width:280px;
+    animation: slideIn .3s ease;
+    box-shadow:0 8px 32px rgba(0,0,0,0.4);
+  }
+  .toast.error { border-left-color:var(--accent2); }
+  .toast.warn  { border-left-color:var(--warn); }
+  @keyframes slideIn { from{transform:translateX(100%);opacity:0} to{transform:translateX(0);opacity:1} }
+  @keyframes fadeDown { from{transform:translateY(-20px);opacity:0} to{transform:translateY(0);opacity:1} }
+  @keyframes fadeUp   { from{transform:translateY(20px);opacity:0} to{transform:translateY(0);opacity:1} }
+
+  /* Encrypt indicator */
+  .enc-label {
+    font-family:'Share Tech Mono', monospace;
+    font-size:9px;
+    padding:3px 8px;
+    background:rgba(0,255,136,0.08);
+    border:1px solid rgba(0,255,136,0.25);
+    color:var(--accent3);
+    display:inline-flex; align-items:center; gap:4px;
+    border-radius:2px;
+  }
+  .enc-dot { width:5px; height:5px; border-radius:50%; background:var(--accent3); animation:pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(0.8)} }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width:4px; }
+  ::-webkit-scrollbar-track { background:var(--bg); }
+  ::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+  ::-webkit-scrollbar-thumb:hover { background:var(--accent); }
+
+  /* Admin badge special */
+  .is-admin .avatar { background:linear-gradient(135deg,rgba(255,170,0,.2),rgba(255,170,0,.05)); border-color:rgba(255,170,0,.4); color:var(--warn); }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════ LOGIN SCREEN ══════════════════════════════════════ -->
+<div id="loginScreen" class="screen active">
+  <div class="logo-block">
+    <div class="logo-title">VAULT<span style="color:#fff;opacity:.2">OS</span></div>
+    <div class="logo-sub">▸ SECURE FILE SYSTEM v2.1 ◂</div>
+  </div>
+  <div class="login-box">
+    <div class="tab-row">
+      <button class="tab-btn active" onclick="switchAuthTab('login')">LOGIN</button>
+      <button class="tab-btn" onclick="switchAuthTab('register')">REGISTER</button>
+    </div>
+
+    <!-- Login form -->
+    <div id="loginForm">
+      <div class="form-group">
+        <label class="form-label">USERNAME</label>
+        <input class="form-input" id="loginUser" type="text" placeholder="enter username" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label class="form-label">PASSWORD</label>
+        <input class="form-input" id="loginPass" type="password" placeholder="••••••••">
+      </div>
+      <button class="btn-primary" onclick="doLogin()">AUTHENTICATE</button>
+      <div class="msg-box" id="loginMsg"></div>
+      <div style="margin-top:16px; font-family:'Share Tech Mono',monospace; font-size:9px; color:var(--text-dim); letter-spacing:1px; line-height:1.8;">
+        DEMO ACCOUNTS:<br>
+        admin / admin123 &nbsp;[ADMIN]<br>
+        alice / pass123 &nbsp;&nbsp;&nbsp;[USER]<br>
+        bob / pass456 &nbsp;&nbsp;&nbsp;&nbsp;[USER]
+      </div>
+    </div>
+
+    <!-- Register form -->
+    <div id="registerForm" style="display:none">
+      <div class="form-group">
+        <label class="form-label">USERNAME</label>
+        <input class="form-input" id="regUser" type="text" placeholder="choose username" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label class="form-label">EMAIL</label>
+        <input class="form-input" id="regEmail" type="email" placeholder="your@email.com">
+      </div>
+      <div class="form-group">
+        <label class="form-label">PASSWORD</label>
+        <input class="form-input" id="regPass" type="password" placeholder="min 6 characters">
+      </div>
+      <button class="btn-primary" onclick="doRegister()">CREATE ACCOUNT</button>
+      <div class="msg-box" id="regMsg"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════ APP SCREEN ══════════════════════════════════════ -->
+<div id="appScreen" class="screen">
+  <!-- Topbar -->
+  <div class="topbar">
+    <div class="topbar-logo">VAULT<span style="opacity:.3">OS</span></div>
+    <span id="topUserBadge" class="badge badge-user">USER</span>
+    <span class="topbar-user" id="topUsername"></span>
+    <div class="enc-label"><span class="enc-dot"></span> AES-256 ACTIVE</div>
+    <button class="btn-sm" onclick="doLogout()">LOGOUT</button>
+  </div>
+
+  <div class="app-body">
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="sidebar-section">
+        <div class="sidebar-label">NAVIGATION</div>
+        <div class="nav-item active" onclick="showView('files')"><span class="nav-icon">🗂</span> My Files</div>
+        <div class="nav-item" onclick="showView('upload')"><span class="nav-icon">⬆</span> Upload</div>
+        <div class="nav-item" onclick="showView('shared')"><span class="nav-icon">🔗</span> Shared</div>
+        <div class="nav-item" onclick="showView('logs')"><span class="nav-icon">📋</span> Activity Log</div>
+      </div>
+      <div class="sidebar-section" id="adminNav" style="display:none">
+        <div class="sidebar-label">ADMIN</div>
+        <div class="nav-item" onclick="showView('dashboard')"><span class="nav-icon">📊</span> Dashboard</div>
+        <div class="nav-item" onclick="showView('users')"><span class="nav-icon">👥</span> Users</div>
+        <div class="nav-item" onclick="showView('allfiles')"><span class="nav-icon">📁</span> All Files</div>
+        <div class="nav-item" onclick="showView('alllogs')"><span class="nav-icon">🔍</span> Audit Log</div>
+      </div>
+      <div class="sidebar-section" style="margin-top:auto;">
+        <div class="sidebar-label">SYSTEM</div>
+        <div class="nav-item" onclick="showView('settings')"><span class="nav-icon">⚙</span> Settings</div>
+      </div>
+    </div>
+
+    <!-- Main -->
+    <div class="main-content">
+
+      <!-- ─── MY FILES ─── -->
+      <div class="view active" id="view-files">
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">MY FILES</span>
+            <button class="btn-sm" onclick="showView('upload')" style="border-color:var(--accent); color:var(--accent);">+ UPLOAD</button>
+          </div>
+          <div id="myFilesList"></div>
+        </div>
+      </div>
+
+      <!-- ─── UPLOAD ─── -->
+      <div class="view" id="view-upload">
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">UPLOAD FILE</span></div>
+          <div class="panel-body">
+            <div class="upload-zone" onclick="triggerUpload()">
+              <div class="upload-zone-icon">🔒</div>
+              <div class="upload-zone-text">CLICK TO SELECT FILE<br><span style="color:var(--accent);font-size:10px;">Files are encrypted with AES-256 before storage</span></div>
+              <input type="file" id="fileInput" style="display:none" onchange="handleFileSelect(this)">
+            </div>
+            <div id="uploadForm" style="display:none">
+              <div class="form-group">
+                <label class="form-label">SELECTED FILE</label>
+                <input class="form-input" id="uploadFileName" readonly>
+              </div>
+              <div class="form-group">
+                <label class="form-label">DESCRIPTION (optional)</label>
+                <input class="form-input" id="uploadDesc" placeholder="file description...">
+              </div>
+              <div class="form-group">
+                <label class="form-label">ACCESS PERMISSIONS</label>
+                <div class="perm-checkboxes">
+                  <label class="perm-check"><input type="checkbox" id="permRead" checked disabled> Read (always)</label>
+                  <label class="perm-check"><input type="checkbox" id="permWrite"> Allow others to write</label>
+                  <label class="perm-check"><input type="checkbox" id="permDelete"> Allow others to delete</label>
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">SHARE WITH (username or "all")</label>
+                <input class="form-input" id="shareWith" placeholder="e.g. alice, bob or all">
+              </div>
+              <button class="btn-primary" style="width:auto;padding:10px 32px;" onclick="doUpload()">ENCRYPT & UPLOAD</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── SHARED ─── -->
+      <div class="view" id="view-shared">
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">SHARED WITH ME</span></div>
+          <div id="sharedFilesList"></div>
+        </div>
+      </div>
+
+      <!-- ─── MY LOGS ─── -->
+      <div class="view" id="view-logs">
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">MY ACTIVITY LOG</span></div>
+          <div class="panel-body" id="myLogsList"></div>
+        </div>
+      </div>
+
+      <!-- ─── ADMIN: DASHBOARD ─── -->
+      <div class="view" id="view-dashboard">
+        <div class="stats-grid" id="statsGrid"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+          <div class="panel">
+            <div class="panel-header"><span class="panel-title">RECENT ACTIVITY</span></div>
+            <div class="panel-body" id="recentActivity"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-header"><span class="panel-title">FILE TYPES</span></div>
+            <div class="panel-body" id="fileTypes"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── ADMIN: USERS ─── -->
+      <div class="view" id="view-users">
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">USER MANAGEMENT</span>
+            <span style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text-dim)" id="userCount"></span>
+          </div>
+          <div id="userList"></div>
+        </div>
+      </div>
+
+      <!-- ─── ADMIN: ALL FILES ─── -->
+      <div class="view" id="view-allfiles">
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">ALL FILES</span></div>
+          <div id="allFilesList"></div>
+        </div>
+      </div>
+
+      <!-- ─── ADMIN: AUDIT LOG ─── -->
+      <div class="view" id="view-alllogs">
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">FULL AUDIT LOG</span></div>
+          <div class="panel-body" id="allLogsList"></div>
+        </div>
+      </div>
+
+      <!-- ─── SETTINGS ─── -->
+      <div class="view" id="view-settings">
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">ACCOUNT SETTINGS</span></div>
+          <div class="panel-body">
+            <div class="form-group">
+              <label class="form-label">NEW PASSWORD</label>
+              <input class="form-input" id="newPass" type="password" placeholder="enter new password">
+            </div>
+            <div class="form-group">
+              <label class="form-label">CONFIRM PASSWORD</label>
+              <input class="form-input" id="confPass" type="password" placeholder="confirm new password">
+            </div>
+            <button class="btn-primary" style="width:auto;padding:10px 24px;" onclick="changePassword()">UPDATE PASSWORD</button>
+            <div class="msg-box" id="settingsMsg"></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">ENCRYPTION INFO</span></div>
+          <div class="panel-body">
+            <div style="font-family:'Share Tech Mono',monospace; font-size:11px; line-height:2; color:var(--text-dim);">
+              ALGORITHM &nbsp;&nbsp;&nbsp;&nbsp;: <span style="color:var(--accent3)">AES-256-GCM (simulated)</span><br>
+              KEY DERIVATION: <span style="color:var(--accent3)">PBKDF2-SHA256</span><br>
+              HASH FUNCTION : <span style="color:var(--accent3)">SHA-256</span><br>
+              SESSION TOKEN : <span style="color:var(--accent3)" id="sessionToken"></span><br>
+              LOGGED IN AT  : <span style="color:var(--accent3)" id="loginAt"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /main-content -->
+  </div><!-- /app-body -->
+</div><!-- /appScreen -->
+
+<!-- Upload modal (not needed, inline form used) -->
+
+<!-- Toast container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+/* ════════════════════════════════════════════════════════════
+   STATE — SIMULATED BACKEND (in-memory)
+════════════════════════════════════════════════════════════ */
+const DB = {
+  users: [
+    { id:1, username:'admin', email:'admin@vault.os', password:hash('admin123'), role:'admin', createdAt:'2025-01-01 09:00:00', active:true },
+    { id:2, username:'alice', email:'alice@vault.os', password:hash('pass123'),  role:'user',  createdAt:'2025-01-05 14:30:00', active:true },
+    { id:3, username:'bob',   email:'bob@vault.os',   password:hash('pass456'),  role:'user',  createdAt:'2025-01-10 11:00:00', active:true },
+  ],
+  files: [
+    { id:1, name:'project_report.pdf',  owner:2, desc:'Q4 project report', size:'2.4 MB', type:'pdf', encrypted:true, createdAt:'2025-03-01 10:15:00', permissions:{read:['alice','bob','all'], write:['alice'], delete:['alice']} },
+    { id:2, name:'budget_2025.xlsx',    owner:2, desc:'Annual budget', size:'1.1 MB', type:'xlsx', encrypted:true, createdAt:'2025-03-05 16:20:00', permissions:{read:['alice'], write:['alice'], delete:['alice']} },
+    { id:3, name:'meeting_notes.txt',   owner:3, desc:'Standup notes', size:'12 KB', type:'txt', encrypted:true, createdAt:'2025-03-10 09:00:00', permissions:{read:['all'], write:['bob'], delete:['bob']} },
+    { id:4, name:'source_code.zip',     owner:1, desc:'App source backup', size:'8.7 MB', type:'zip', encrypted:true, createdAt:'2025-03-12 13:45:00', permissions:{read:['admin'], write:['admin'], delete:['admin']} },
+  ],
+  logs: [
+    { id:1, time:'09:00:01', date:'2025-03-01', user:'admin',  level:'AUTH',  msg:'User admin logged in from 192.168.1.1' },
+    { id:2, time:'09:05:22', date:'2025-03-01', user:'alice',  level:'AUTH',  msg:'User alice logged in from 192.168.1.44' },
+    { id:3, time:'09:07:33', date:'2025-03-01', user:'alice',  level:'INFO',  msg:'File uploaded: project_report.pdf (encrypted)' },
+    { id:4, time:'09:15:00', date:'2025-03-05', user:'alice',  level:'INFO',  msg:'File uploaded: budget_2025.xlsx (encrypted)' },
+    { id:5, time:'10:00:00', date:'2025-03-10', user:'bob',    level:'AUTH',  msg:'User bob logged in from 10.0.0.5' },
+    { id:6, time:'10:01:00', date:'2025-03-10', user:'bob',    level:'INFO',  msg:'File uploaded: meeting_notes.txt (encrypted)' },
+    { id:7, time:'13:45:00', date:'2025-03-12', user:'admin',  level:'INFO',  msg:'File uploaded: source_code.zip (encrypted)' },
+    { id:8, time:'14:00:00', date:'2025-03-12', user:'alice',  level:'WARN',  msg:'Access denied: budget_2025.xlsx (insufficient permissions for bob)' },
+    { id:9, time:'14:30:00', date:'2025-03-12', user:'admin',  level:'INFO',  msg:'User bob permissions updated' },
+  ],
+  nextFileId: 5,
+  nextLogId: 10,
+  nextUserId: 4,
+};
+
+// Simple hash (NOT real crypto — simulation only)
+function hash(str) {
+  let h=5381;
+  for(let i=0;i<str.length;i++) h=((h<<5)+h)+str.charCodeAt(i);
+  return (h>>>0).toString(16);
+}
+
+// Generate session token
+function genToken() {
+  return Array.from({length:32},()=>Math.floor(Math.random()*16).toString(16)).join('').toUpperCase();
+}
+
+// Simulate AES key display
+function fakeKey() {
+  return Array.from({length:8},()=>Math.floor(Math.random()*0xFFFF).toString(16).toUpperCase().padStart(4,'0')).join('-');
+}
+
+let currentUser = null;
+let sessionToken = '';
+let loginTime = '';
+
+/* ════════════════════════════════════════════════════════════
+   AUTH
+════════════════════════════════════════════════════════════ */
+function switchAuthTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach((b,i)=>b.classList.toggle('active', (tab==='login'&&i===0)||(tab==='register'&&i===1)));
+  document.getElementById('loginForm').style.display   = tab==='login'    ? '' : 'none';
+  document.getElementById('registerForm').style.display = tab==='register' ? '' : 'none';
+}
+
+function doLogin() {
+  const u = document.getElementById('loginUser').value.trim();
+  const p = document.getElementById('loginPass').value;
+  const msg = document.getElementById('loginMsg');
+  msg.className='msg-box';
+
+  if(!u||!p){ showMsg(msg,'error','All fields required'); return; }
+
+  const user = DB.users.find(x=>x.username===u && x.active);
+  if(!user || user.password !== hash(p)){
+    addLog(u,'AUTH',`Failed login attempt for user: ${u}`);
+    showMsg(msg,'error','Invalid credentials');
+    return;
+  }
+
+  currentUser = user;
+  sessionToken = genToken();
+  loginTime = new Date().toLocaleString();
+  addLog(u,'AUTH',`User ${u} logged in — session ${sessionToken.slice(0,8)}...`);
+  showApp();
+}
+
+function doRegister() {
+  const u = document.getElementById('regUser').value.trim();
+  const e = document.getElementById('regEmail').value.trim();
+  const p = document.getElementById('regPass').value;
+  const msg = document.getElementById('regMsg');
+  msg.className='msg-box';
+
+  if(!u||!e||!p){ showMsg(msg,'error','All fields required'); return; }
+  if(p.length<6){ showMsg(msg,'error','Password min 6 characters'); return; }
+  if(DB.users.find(x=>x.username===u)){ showMsg(msg,'error','Username already taken'); return; }
+
+  const newUser = {id:DB.nextUserId++, username:u, email:e, password:hash(p), role:'user', createdAt:now(), active:true};
+  DB.users.push(newUser);
+  addLog(u,'AUTH',`New user registered: ${u}`);
+  showMsg(msg,'success',`Account created! You can now login as ${u}`);
+}
+
+function doLogout() {
+  addLog(currentUser.username,'AUTH',`User ${currentUser.username} logged out`);
+  currentUser = null;
+  document.getElementById('loginUser').value='';
+  document.getElementById('loginPass').value='';
+  document.getElementById('loginMsg').className='msg-box';
+  document.getElementById('appScreen').classList.remove('active');
+  document.getElementById('loginScreen').classList.add('active');
+}
+
+/* ════════════════════════════════════════════════════════════
+   APP INIT
+════════════════════════════════════════════════════════════ */
+function showApp() {
+  document.getElementById('loginScreen').classList.remove('active');
+  document.getElementById('appScreen').classList.add('active');
+
+  document.getElementById('topUsername').textContent = currentUser.username.toUpperCase();
+  const badge = document.getElementById('topUserBadge');
+  if(currentUser.role==='admin'){
+    badge.textContent='ADMIN'; badge.className='badge badge-admin';
+    document.getElementById('adminNav').style.display='';
+  } else {
+    badge.textContent='USER'; badge.className='badge badge-user';
+    document.getElementById('adminNav').style.display='none';
+  }
+  document.getElementById('sessionToken').textContent = sessionToken.slice(0,16)+'...';
+  document.getElementById('loginAt').textContent = loginTime;
+
+  showView('files');
+}
+
+/* ════════════════════════════════════════════════════════════
+   VIEWS
+════════════════════════════════════════════════════════════ */
+function showView(name) {
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  const v = document.getElementById('view-'+name);
+  if(v) v.classList.add('active');
+  // activate nav
+  document.querySelectorAll('.nav-item').forEach(n=>{
+    if(n.getAttribute('onclick')&&n.getAttribute('onclick').includes(`'${name}'`)) n.classList.add('active');
+  });
+
+  // Render
+  if(name==='files')     renderMyFiles();
+  if(name==='shared')    renderShared();
+  if(name==='logs')      renderMyLogs();
+  if(name==='dashboard') renderDashboard();
+  if(name==='users')     renderUsers();
+  if(name==='allfiles')  renderAllFiles();
+  if(name==='alllogs')   renderAllLogs();
+}
+
+/* ════════════════════════════════════════════════════════════
+   FILE HELPERS
+════════════════════════════════════════════════════════════ */
+function canRead(file, username) {
+  return file.permissions.read.includes(username) || file.permissions.read.includes('all') || currentUser.role==='admin';
+}
+function canWrite(file, username) {
+  return file.permissions.write.includes(username) || currentUser.role==='admin';
+}
+function canDelete(file, username) {
+  return file.permissions.delete.includes(username) || currentUser.role==='admin';
+}
+
+function fileIcon(type) {
+  const map = {pdf:'📄',xlsx:'📊',txt:'📝',zip:'🗜',png:'🖼',jpg:'🖼',doc:'📃',mp4:'🎬',mp3:'🎵'};
+  return map[type]||'📁';
+}
+
+function fileRow(file, showOwner=false) {
+  const u = currentUser.username;
+  const rd = canRead(file,u);
+  const wr = canWrite(file,u);
+  const dl = canDelete(file,u);
+  const owner = DB.users.find(x=>x.id===file.owner);
+  return `
+  <tr>
+    <td><span class="file-icon">${fileIcon(file.type)}</span><span class="file-name">${file.name}</span></td>
+    ${showOwner?`<td style="color:var(--text-dim);font-size:12px">${owner?owner.username:'-'}</td>`:''}
+    <td>${file.desc||'-'}</td>
+    <td style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text-dim)">${file.size}</td>
+    <td>
+      ${rd?`<span class="perm-badge perm-r">R</span>`:`<span class="perm-badge perm-x">-</span>`}
+      ${wr?`<span class="perm-badge perm-w">W</span>`:`<span class="perm-badge perm-x">-</span>`}
+      ${dl?`<span class="perm-badge perm-d">D</span>`:`<span class="perm-badge perm-x">-</span>`}
+    </td>
+    <td><span class="file-enc">🔑 ENC</span></td>
+    <td style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text-dim)">${file.createdAt.split(' ')[0]}</td>
+    <td>
+      ${rd?`<button class="action-btn" onclick="doDownload(${file.id})">DOWNLOAD</button>`:''}
+      ${dl?`<button class="action-btn del" onclick="doDelete(${file.id})">DELETE</button>`:''}
+    </td>
+  </tr>`;
+}
+
+function tableWrap(rows, showOwner=false) {
+  return `<table class="file-table">
+    <thead><tr>
+      <th>NAME</th>
+      ${showOwner?'<th>OWNER</th>':''}
+      <th>DESCRIPTION</th>
+      <th>SIZE</th>
+      <th>PERMISSIONS</th>
+      <th>ENCRYPTION</th>
+      <th>DATE</th>
+      <th>ACTIONS</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+function renderMyFiles() {
+  const myFiles = DB.files.filter(f=>f.owner===currentUser.id);
+  const el = document.getElementById('myFilesList');
+  if(myFiles.length===0){
+    el.innerHTML='<div style="padding:32px;text-align:center;font-family:Share Tech Mono,monospace;font-size:12px;color:var(--text-dim)">NO FILES — UPLOAD YOUR FIRST FILE</div>';
+    return;
+  }
+  el.innerHTML = tableWrap(myFiles.map(f=>fileRow(f)).join(''));
+}
+
+function renderShared() {
+  const u = currentUser.username;
+  const shared = DB.files.filter(f=>f.owner!==currentUser.id && canRead(f,u));
+  const el = document.getElementById('sharedFilesList');
+  if(shared.length===0){
+    el.innerHTML='<div style="padding:32px;text-align:center;font-family:Share Tech Mono,monospace;font-size:12px;color:var(--text-dim)">NO SHARED FILES</div>';
+    return;
+  }
+  el.innerHTML = tableWrap(shared.map(f=>fileRow(f,true)).join(''), true);
+}
+
+function renderAllFiles() {
+  const el = document.getElementById('allFilesList');
+  if(!currentUser||currentUser.role!=='admin'){ el.innerHTML=''; return; }
+  el.innerHTML = tableWrap(DB.files.map(f=>fileRow(f,true)).join(''), true);
+}
+
+/* ════════════════════════════════════════════════════════════
+   UPLOAD
+════════════════════════════════════════════════════════════ */
+function triggerUpload() { document.getElementById('fileInput').click(); }
+
+function handleFileSelect(input) {
+  if(input.files.length===0) return;
+  const file = input.files[0];
+  document.getElementById('uploadFileName').value = file.name;
+  document.getElementById('uploadForm').style.display='';
+}
+
+function doUpload() {
+  const name = document.getElementById('uploadFileName').value;
+  if(!name){ toast('No file selected','error'); return; }
+  const desc = document.getElementById('uploadDesc').value;
+  const allowWrite = document.getElementById('permWrite').checked;
+  const allowDelete = document.getElementById('permDelete').checked;
+  const shareRaw = document.getElementById('shareWith').value.trim();
+
+  const shareList = shareRaw ? shareRaw.split(',').map(s=>s.trim()).filter(Boolean) : [];
+  // always include owner
+  const readList = [currentUser.username, ...shareList];
+  const writeList = allowWrite ? [currentUser.username, ...shareList] : [currentUser.username];
+  const deleteList = allowDelete ? [currentUser.username, ...shareList] : [currentUser.username];
+
+  const ext = name.split('.').pop().toLowerCase();
+  const sizes = ['KB','MB'];
+  const fakeSize = (Math.random()*10).toFixed(1)+' '+(Math.random()>0.5?'MB':'KB');
+
+  const newFile = {
+    id: DB.nextFileId++,
+    name, owner: currentUser.id, desc,
+    size: fakeSize, type: ext, encrypted: true,
+    createdAt: now(),
+    permissions: { read: readList, write: writeList, delete: deleteList }
+  };
+  DB.files.push(newFile);
+  addLog(currentUser.username,'INFO',`File uploaded: ${name} [AES-256 encrypted, key: ${fakeKey()}]`);
+
+  // Reset form
+  document.getElementById('fileInput').value='';
+  document.getElementById('uploadFileName').value='';
+  document.getElementById('uploadDesc').value='';
+  document.getElementById('shareWith').value='';
+  document.getElementById('uploadForm').style.display='none';
+
+  toast(`✓ ${name} encrypted & uploaded`,'success');
+  showView('files');
+}
+
+function doDownload(fileId) {
+  const file = DB.files.find(f=>f.id===fileId);
+  if(!file || !canRead(file,currentUser.username)){ toast('Access denied','error'); return; }
+  addLog(currentUser.username,'INFO',`File downloaded: ${file.name} [decrypted in secure session]`);
+  toast(`⬇ Decrypting & downloading ${file.name}...`);
+}
+
+function doDelete(fileId) {
+  const file = DB.files.find(f=>f.id===fileId);
+  if(!file || !canDelete(file,currentUser.username)){ toast('Access denied: insufficient permissions','error'); return; }
+  DB.files = DB.files.filter(f=>f.id!==fileId);
+  addLog(currentUser.username,'WARN',`File deleted: ${file.name}`);
+  toast(`🗑 ${file.name} deleted`,'warn');
+  renderMyFiles();
+  renderAllFiles();
+}
+
+/* ════════════════════════════════════════════════════════════
+   LOGS
+════════════════════════════════════════════════════════════ */
+function renderMyLogs() {
+  const myLogs = DB.logs.filter(l=>l.user===currentUser.username).slice().reverse();
+  const el = document.getElementById('myLogsList');
+  if(myLogs.length===0){ el.innerHTML='<span style="font-family:Share Tech Mono,monospace;font-size:11px;color:var(--text-dim)">NO ACTIVITY YET</span>'; return; }
+  el.innerHTML = myLogs.map(logRow).join('');
+}
+
+function renderAllLogs() {
+  const el = document.getElementById('allLogsList');
+  el.innerHTML = DB.logs.slice().reverse().map(logRow).join('');
+}
+
+function logRow(l) {
+  return `<div class="log-row">
+    <span class="log-time">${l.time}</span>
+    <span class="log-level ${l.level}">${l.level}</span>
+    <span style="color:var(--text-dim);min-width:60px;font-family:'Share Tech Mono',monospace;font-size:11px">${l.user}</span>
+    <span class="log-msg">${l.msg}</span>
+  </div>`;
+}
+
+/* ════════════════════════════════════════════════════════════
+   DASHBOARD
+════════════════════════════════════════════════════════════ */
+function renderDashboard() {
+  document.getElementById('statsGrid').innerHTML = `
+    <div class="stat-card"><div class="stat-value">${DB.users.length}</div><div class="stat-label">Total Users</div><div class="stat-icon">👥</div></div>
+    <div class="stat-card"><div class="stat-value">${DB.files.length}</div><div class="stat-label">Files Stored</div><div class="stat-icon">📁</div></div>
+    <div class="stat-card"><div class="stat-value">${DB.logs.length}</div><div class="stat-label">Log Entries</div><div class="stat-icon">📋</div></div>
+    <div class="stat-card"><div class="stat-value">100%</div><div class="stat-label">Encrypted</div><div class="stat-icon">🔒</div></div>
+  `;
+  document.getElementById('recentActivity').innerHTML = DB.logs.slice(-5).reverse().map(logRow).join('');
+  const types = {};
+  DB.files.forEach(f=>{ types[f.type]=(types[f.type]||0)+1; });
+  document.getElementById('fileTypes').innerHTML = Object.entries(types).map(([t,c])=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);">
+      <span style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text-dim)">${fileIcon(t)} .${t.toUpperCase()}</span>
+      <span style="font-family:'Orbitron',monospace;font-size:14px;color:var(--accent)">${c}</span>
+    </div>
+  `).join('');
+}
+
+/* ════════════════════════════════════════════════════════════
+   USERS
+════════════════════════════════════════════════════════════ */
+function renderUsers() {
+  document.getElementById('userCount').textContent = DB.users.length + ' ACCOUNTS';
+  document.getElementById('userList').innerHTML = DB.users.map(u=>`
+    <div class="user-card ${u.role==='admin'?'is-admin':''}">
+      <div class="avatar">${u.username[0].toUpperCase()}</div>
+      <div class="user-info">
+        <div class="user-name">${u.username} ${u.id===currentUser.id?'<span style="font-family:Share Tech Mono,monospace;font-size:9px;color:var(--text-dim)">(you)</span>':''}</div>
+        <div class="user-email">${u.email} · joined ${u.createdAt.split(' ')[0]}</div>
+      </div>
+      <span class="badge ${u.role==='admin'?'badge-admin':'badge-user'}">${u.role.toUpperCase()}</span>
+      ${u.id!==currentUser.id?`<button class="action-btn" onclick="toggleUserActive(${u.id})">${u.active?'DISABLE':'ENABLE'}</button>`:''}
+      ${u.role==='user'?`<button class="action-btn" onclick="promoteUser(${u.id})" style="border-color:var(--warn);color:var(--warn)">PROMOTE</button>`:''}
+    </div>
+  `).join('');
+}
+
+function toggleUserActive(uid) {
+  const u = DB.users.find(x=>x.id===uid);
+  if(!u) return;
+  u.active=!u.active;
+  addLog(currentUser.username,'WARN',`User ${u.username} ${u.active?'enabled':'disabled'} by admin`);
+  toast(`User ${u.username} ${u.active?'enabled':'disabled'}`);
+  renderUsers();
+}
+
+function promoteUser(uid) {
+  const u = DB.users.find(x=>x.id===uid);
+  if(!u) return;
+  u.role='admin';
+  addLog(currentUser.username,'WARN',`User ${u.username} promoted to admin`);
+  toast(`${u.username} promoted to ADMIN`,'warn');
+  renderUsers();
+}
+
+/* ════════════════════════════════════════════════════════════
+   SETTINGS
+════════════════════════════════════════════════════════════ */
+function changePassword() {
+  const np = document.getElementById('newPass').value;
+  const cp = document.getElementById('confPass').value;
+  const msg = document.getElementById('settingsMsg');
+  msg.className='msg-box';
+
+  if(!np||!cp){ showMsg(msg,'error','Fill all fields'); return; }
+  if(np!==cp){ showMsg(msg,'error','Passwords do not match'); return; }
+  if(np.length<6){ showMsg(msg,'error','Min 6 characters'); return; }
+
+  currentUser.password = hash(np);
+  addLog(currentUser.username,'INFO','Password changed successfully');
+  showMsg(msg,'success','Password updated successfully');
+  document.getElementById('newPass').value='';
+  document.getElementById('confPass').value='';
+}
+
+/* ════════════════════════════════════════════════════════════
+   HELPERS
+════════════════════════════════════════════════════════════ */
+function addLog(user, level, msg) {
+  const d = new Date();
+  DB.logs.push({
+    id: DB.nextLogId++,
+    time: d.toTimeString().slice(0,8),
+    date: d.toISOString().slice(0,10),
+    user, level, msg
+  });
+}
+
+function now() {
+  return new Date().toISOString().replace('T',' ').slice(0,19);
+}
+
+function showMsg(el, type, text) {
+  el.className='msg-box '+type;
+  el.textContent=text;
+}
+
+function toast(msg, type='') {
+  const t = document.createElement('div');
+  t.className='toast'+(type?' '+type:'');
+  t.textContent = msg;
+  document.getElementById('toastContainer').appendChild(t);
+  setTimeout(()=>{ t.style.opacity='0'; t.style.transform='translateX(100%)'; t.style.transition='all .3s'; setTimeout(()=>t.remove(),300); }, 3000);
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e=>{
+  if(e.key==='Enter' && document.getElementById('loginScreen').classList.contains('active')) {
+    if(document.getElementById('loginForm').style.display!=='none') doLogin();
+    else doRegister();
+  }
+});
+</script>
+</body>
+</html>
